@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { ImageUpload } from '../ImageUpload';
 import './Canvas.css';
 
@@ -6,33 +6,53 @@ const DEFAULT_IMAGE = 'https://picsum.photos/seed/annotator/900/600';
 
 export function Canvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [imageSrc, setImageSrc] = useState(DEFAULT_IMAGE);
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
-  const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 });
-  const [imageScale, setImageScale] = useState(100);
+  const imgRef    = useRef<HTMLImageElement | null>(null);
 
-  useEffect(() => {
+  const [imageSrc, setImageSrc]           = useState(DEFAULT_IMAGE);
+  const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 });
+  const [imageScale, setImageScale]       = useState(100);
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const img    = imgRef.current;
+    if (!canvas || !img) return;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    // TODO: draw annotations here
+    ctx.beginPath(); // Start a new path
+    ctx.rect(10, 20, 150, 100); // Add a rectangle to the current path
+    ctx.fill(); // Render the path
+    ctx.closePath(); // Close the path
+  }, []);
+
+  const setup = useCallback((src: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.src = imageSrc;
+    img.src = src;
     img.onload = () => {
       const container = canvas.parentElement!;
-      const maxW = container.clientWidth - 32;
-      const maxH = container.clientHeight - 160;
+      const maxW  = container.clientWidth - 32;
+      const maxH  = container.clientHeight - 160;
       const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
-      canvas.width = Math.round(img.naturalWidth * scale);
+
+      canvas.width  = Math.round(img.naturalWidth * scale);
       canvas.height = Math.round(img.naturalHeight * scale);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      setCanvasSize({ width: canvas.width, height: canvas.height });
+
+      imgRef.current = img;
       setImageNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
       setImageScale(scale * 100);
+
+      draw();
     };
-  }, [imageSrc]);
+  }, [draw]);
+
+  useEffect(() => { setup(imageSrc); }, [imageSrc, setup]);
 
   return (
     <div className="canvas-wrapper">
