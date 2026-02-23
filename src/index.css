@@ -1,0 +1,61 @@
+:root {
+  /* Primary — Purple */
+  --color-primary:          #673ab7;
+  --color-primary-dark:     #4d2c89;
+  --color-primary-darker:   #341d5c;
+  --color-primary-darkest:  #1a0f2e;
+  --color-primary-light:    #8d6bc9;
+  --color-primary-lighter:  #b39cdb;
+  --color-primary-lightest: #d9ceed;
+
+  /* Secondary — Teal */
+  --color-secondary:          #009688;
+  --color-secondary-dark:     #00897b;
+  --color-secondary-darker:   #00695c;
+  --color-secondary-darkest:  #004d40;
+  --color-secondary-light:    #4db6ac;
+  --color-secondary-lighter:  #80cbc4;
+  --color-secondary-lightest: #b2dfdb;
+
+  /* Error */
+  --color-error: #f44336;
+
+  /* Neutrals */
+  --color-neutral-900: #0d0d0d;
+  --color-neutral-800: #1e1e1e;
+  --color-neutral-700: #212121;
+  --color-neutral-600: #333333;
+  --color-neutral-500: #666666;
+  --color-neutral-400: #999999;
+  --color-neutral-300: #cccccc;
+  --color-neutral-200: #e2e2e2;
+  --color-neutral-100: #fafafa;
+
+  /* Surface */
+  --color-surface: #efefef;
+
+  /* Spacing */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+
+  /* Layout */
+  --sidebar-width: 20%;
+  --canvas-width:  80%;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  height: 100vh;
+  overflow: hidden;
+  background: var(--color-surface);
+  color: var(--color-neutral-900);
+  font-family: Inter, system-ui, sans-serif;
+}
