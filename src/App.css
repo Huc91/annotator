@@ -5,11 +5,11 @@
 
 .app__toolbar {
   width: var(--sidebar-width);
-  background: var(--color-primary-darkest);
-  border-right: 1px solid var(--color-primary-darker);
+  background: var(--surface-sidebar);
+  border-left: var(--border-width-sm) solid var(--border-menu);
 }
 
 .app__canvas {
   width: var(--canvas-width);
-  background: var(--color-surface);
+  background: var(--surface-page);
 }
