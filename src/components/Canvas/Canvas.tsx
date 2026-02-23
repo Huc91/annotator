@@ -31,14 +31,21 @@ export function Canvas() {
     if (isDrawing.current && startClick.current) {
       const { x: x1, y: y1 } = startClick.current;
       const { x: x2, y: y2 } = mouseCoordsRef.current;
-      ctx.strokeStyle = '#673ab7';
-      ctx.lineWidth   = 2;
+      ctx.strokeStyle = '#0000FF';
+      ctx.lineWidth   = 1;
       ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+
+      ctx.beginPath();
+      ctx.rect(x1 - 2, y1 - 2, 4, 4);
+      ctx.rect(x2 - 2, y2 - 2, 4, 4);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.stroke();
     }
 
     rects.current.forEach(({ x1, y1, x2, y2 }) => {
       ctx.strokeStyle = '#673ab7';
-      ctx.lineWidth   = 2;
+      ctx.lineWidth   = 1;
       ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
     });
   }, []);
