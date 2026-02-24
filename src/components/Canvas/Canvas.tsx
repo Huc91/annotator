@@ -12,11 +12,14 @@ export function Canvas() {
   const isDrawing      = useRef(false);
   const isDirty        = useRef(false);
   const rafRef         = useRef<number>(0);
-  const rects          = useRef<{ x1: number; y1: number; x2: number; y2: number }[]>([]);
+  type RectWithLabel = { x1: number; y1: number; x2: number; y2: number; label: string };
+  const rects = useRef<RectWithLabel[]>([]);
 
   const [imageSrc, setImageSrc]                 = useState(DEFAULT_IMAGE);
   const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 });
   const [imageScale, setImageScale]             = useState(100);
+  const [pendingLabel, setPendingLabel]         = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [labelInput, setLabelInput]             = useState('');
 
   const draw = useCallback(() => {
     console.log('draw');
@@ -43,10 +46,16 @@ export function Canvas() {
       ctx.stroke();
     }
 
-    rects.current.forEach(({ x1, y1, x2, y2 }) => {
+    rects.current.forEach(({ x1, y1, x2, y2, label }) => {
       ctx.strokeStyle = '#673ab7';
       ctx.lineWidth   = 1;
       ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      if (label) {
+        ctx.font         = '12px sans-serif';
+        ctx.fillStyle    = '#673ab7';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(label, x1, y1 - 4);
+      }
     });
   }, []);
 
@@ -74,7 +83,10 @@ export function Canvas() {
       if (!isDrawing.current) return;
       mouseCoordsRef.current = getPos(e);
       const end = getPos(e);
-      rects.current.push({ x1: startClick.current!.x, y1: startClick.current!.y, x2: end.x, y2: end.y });
+      const x1 = startClick.current!.x;
+      const y1 = startClick.current!.y;
+      setPendingLabel({ x1, y1, x2: end.x, y2: end.y });
+      setLabelInput('');
       isDrawing.current  = false;
       startClick.current = null;
       draw();
@@ -88,7 +100,7 @@ export function Canvas() {
     img.crossOrigin = 'anonymous';
     img.src = src;
     img.onload = () => {
-      const container = canvas.parentElement!;
+      const container = canvas.closest('.canvas-wrapper')! as HTMLElement;
       const maxW  = container.clientWidth - 32;
       const maxH  = container.clientHeight - 160;
       const scale = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
@@ -127,10 +139,36 @@ export function Canvas() {
     return cleanup;
   }, [imageSrc, setup]);
 
+  const submitLabel = () => {
+    if (!pendingLabel) return;
+    rects.current.push({ ...pendingLabel, label: labelInput.trim() });
+    setPendingLabel(null);
+    setLabelInput('');
+    draw();
+  };
+
   return (
     <div className="canvas-wrapper">
       <ImageUpload onUpload={setImageSrc} />
-      <canvas ref={canvasRef} />
+      <div className="canvas-container">
+        <canvas ref={canvasRef} />
+        {pendingLabel && (
+          <input
+            className="canvas-inline-label"
+            style={{
+              left: Math.min(pendingLabel.x1, pendingLabel.x2),
+              top:  Math.min(pendingLabel.y1, pendingLabel.y2) - 28,
+            }}
+            type="text"
+            placeholder="Label"
+            value={labelInput}
+            onChange={(e) => setLabelInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitLabel()}
+            onBlur={submitLabel}
+            autoFocus
+          />
+        )}
+      </div>
       <div className="canvas-meta">
         <span>{imageNaturalSize.width} × {imageNaturalSize.height}px</span>
         <span className="canvas-meta__divider" />
