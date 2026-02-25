@@ -25,6 +25,8 @@ interface AppState {
   showTutorial: boolean;
   triggerTutorial: () => void;
   dismissTutorial: () => void;
+  toastMessage: string | null;
+  showToast: (message: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -40,5 +42,10 @@ export const useAppStore = create<AppState>((set) => ({
   dismissTutorial: () => {
     localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
     set({ showTutorial: false });
+  },
+  toastMessage: null,
+  showToast: (message) => {
+    set({ toastMessage: message });
+    setTimeout(() => set({ toastMessage: null }), 3000);
   },
 }));
