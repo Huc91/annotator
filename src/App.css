@@ -4,12 +4,11 @@
 }
 
 .app__toolbar {
-  width: var(--sidebar-width);
   background: var(--surface-sidebar);
   border-left: var(--border-width-sm) solid var(--border-menu);
 }
 
 .app__canvas {
-  width: var(--canvas-width);
+  flex: 1;
   background: var(--surface-page);
 }

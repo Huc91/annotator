@@ -18,25 +18,52 @@
   max-width: 100%;
 }
 
+/* ── inline label input ────────────────────────────────── */
+
 .canvas-inline-label {
   position: absolute;
-  height: 24px;
-  min-width: 60px;
-  padding: 0 var(--spacing-sm);
-  font-family: var(--font-family-primary);
-  font-size: var(--font-size-xs);
-  line-height: 24px;
+  height: 20px;
+  min-width: 40px;
+  padding: 0 6px;
+  font: 12px sans-serif;
+  line-height: 20px;
   color: #fff;
-  background: #673ab7;
+  background: #000;
   border: none;
   border-radius: 4px;
   outline: none;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  -webkit-text-fill-color: #fff;
+  caret-color: #fff;
 }
 
 .canvas-inline-label::placeholder {
   color: rgba(255, 255, 255, 0.6);
 }
+
+/* ── edit-label button on selected annotation ──────────── */
+
+.canvas-edit-label-btn {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  font: 12px sans-serif;
+  line-height: 20px;
+  color: #fff;
+  background: #0000FF;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.canvas-edit-label-btn:hover {
+  filter: brightness(1.2);
+}
+
+/* ── meta info ─────────────────────────────────────────── */
 
 .canvas-meta {
   display: flex;
