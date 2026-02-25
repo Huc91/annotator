@@ -16,8 +16,12 @@ export function ImageUploadModal({ open, onClose }: Props) {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImageSrc(URL.createObjectURL(file));
-    onClose();
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageSrc(reader.result as string);
+      onClose();
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleUrl = () => {
