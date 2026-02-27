@@ -50,15 +50,14 @@ Dragging a handle fires `mousemove` 60+ times per second. If each event triggere
 
 This way I do not trigger continuosly a React re-render.
 
-### Logical reasoning
+### Choices and philosophy
 
-I thought of this like a videogame, so I use hitboxes concept for selection, the animation frame to render etc...
-
-### Module layout
+I thought of this like a videogame, so I used a kind of hitboxes concept for selection, the animation frame to render etc...
+I have splitted the most important pieces of code into multiple parts.
+Files inside Canvas directory:
 
 ```
-src/components/Canvas/
-  types.ts        — Annotation union, DragMode, Point
+  types.ts        — TS types
   constants.ts    — colors, sizes, localStorage key
   geometry.ts     — hit testing, drag math, bounding boxes (pure functions)
   drawing.ts      — canvas 2D rendering: previews, shapes, handles, labels
@@ -66,7 +65,8 @@ src/components/Canvas/
   Canvas.tsx      — orchestrator: owns refs, event loop, mouse handlers, React overlays
 ```
 
-`geometry.ts` and `drawing.ts` are pure and testable in isolation. All imperative glue is confined to `Canvas.tsx`.
+for example `geometry.ts` and `drawing.ts` are pure and testable in isolation. 
+All imperative "glue" is confined to `Canvas.tsx`.
 
 ### Normalised coordinates
 
