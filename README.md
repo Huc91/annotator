@@ -1,4 +1,4 @@
-# Image Annotator
+# :black_nib: Image Annotator
 
 A browser-based image annotation tool built with React, TypeScript and Canvas 2D.
 
@@ -70,12 +70,4 @@ All imperative "glue" is confined to `Canvas.tsx`.
 
 ### Normalised coordinates
 
-Annotations are stored in normalised image coordinates (0 to 1)
-
-### Adding a new shape
-
-1. Add the type to the union in `types.ts`
-2. Add geometry branches in `geometry.ts` (hit test, drag, bounds)
-3. Add drawing branches in `drawing.ts` (render, handles)
-4. Add persistence branches in `persistence.ts` (normalise, CSV)
-5. Add the tool branch in `Canvas.tsx` mouse handlers
+Annotations are stored in normalised image coordinates (0 to 1). You can export them in csv format so this app can communicate with other apps.
