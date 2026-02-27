@@ -16,7 +16,7 @@ A browser-based image annotation tool built with React, TypeScript and Canvas 2D
 - **Keyboard shortcuts** — V (select), R (rectangle), C (circle), Escape (deselect), Delete/Backspace (remove)
 - **Auto-save** — session is persisted to localStorage every 2 seconds and restored on reload
 - **CSV export** — download all annotations as a CSV with normalised coordinates
-- **Image upload bu URL** — load image by URL
+- **Image upload by URL** — load an image via URL
 - **High-DPI rendering** — canvas scales to `devicePixelRatio` for sharp output on Retina displays
 
 ## Getting started
