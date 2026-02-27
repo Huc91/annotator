@@ -1,47 +1,49 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppStore } from '../../store';
-import { drawRectanglePreview, drawAnnotation } from './drawing';
+import { drawRectanglePreview, drawCirclePreview, drawAnnotation } from './drawing';
 import {
-  normalizeRect, getHandleAtPoint, findAnnotationAtPoint,
-  isPointInsideRect, applyDrag, getCursorForHandle,
+  normalizeAnnotation, getHandleAtPoint, findAnnotationAtPoint,
+  isPointInsideAnnotation, applyDrag, getCursorForHandle, getAnnotationBounds,
 } from './geometry';
 import { saveSession, restoreSession } from './persistence';
-import type { AnnotationRect, DragMode, Point } from './types';
+import type { Annotation, AnnotationCircle, DragMode, Point } from './types';
 import './Canvas.css';
 
 export function Canvas() {
   /* ── canvas & image ────────────────────────────────────── */
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imageRef  = useRef<HTMLImageElement | null>(null);
+  const canvasRef        = useRef<HTMLCanvasElement>(null);
+  const imageRef         = useRef<HTMLImageElement | null>(null);
+  const canvasLogicalSize = useRef({ width: 0, height: 0 });
 
   /* ── drawing-in-progress state ─────────────────────────── */
   const mousePosition        = useRef<Point>({ x: 0, y: 0 });
   const drawingStartPosition = useRef<Point | null>(null);
   const isDrawingNewRect     = useRef(false);
+  const isDrawingNewCircle   = useRef(false);
 
   /* ── render loop ───────────────────────────────────────── */
   const needsRedraw      = useRef(false);
   const animationFrameId = useRef(0);
 
   /* ── annotations (source of truth lives in a ref) ──────── */
-  const annotations             = useRef<AnnotationRect[]>([]);
+  const annotations             = useRef<Annotation[]>([]);
   const selectedAnnotationIndex = useRef<number | null>(null);
   const hoveredAnnotationIndex  = useRef<number | null>(null);
   const editingAnnotationIndex  = useRef<number | null>(null);
 
   /* ── drag state ────────────────────────────────────────── */
-  const activeDragMode       = useRef<DragMode | null>(null);
-  const dragStartPosition    = useRef<Point | null>(null);
-  const dragOriginalRect     = useRef<AnnotationRect | null>(null);
+  const activeDragMode    = useRef<DragMode | null>(null);
+  const dragStartPosition = useRef<Point | null>(null);
+  const dragOriginal      = useRef<Annotation | null>(null);
 
   /* ── React state (drives HTML overlays & meta display) ── */
   const imageSrc = useAppStore((s) => s.imageSrc);
-  const [imageNaturalSize, setImageNaturalSize]       = useState({ width: 0, height: 0 });
-  const [imageScalePercent, setImageScalePercent]      = useState(100);
-  const [editingLabelIndex, setEditingLabelIndex]     = useState<number | null>(null);
-  const [labelInputText, setLabelInputText]           = useState('');
-  const [selectedOverlayRect, setSelectedOverlayRect] = useState<AnnotationRect | null>(null);
-  const [editingOverlayRect, setEditingOverlayRect]   = useState<AnnotationRect | null>(null);
+  const [imageNaturalSize, setImageNaturalSize]   = useState({ width: 0, height: 0 });
+  const [imageScalePercent, setImageScalePercent]  = useState(100);
+  const [editingLabelIndex, setEditingLabelIndex] = useState<number | null>(null);
+  const [labelInputText, setLabelInputText]       = useState('');
+  const [selectedOverlay, setSelectedOverlay]     = useState<Annotation | null>(null);
+  const [editingOverlay, setEditingOverlay]       = useState<Annotation | null>(null);
 
   useEffect(() => { editingAnnotationIndex.current = editingLabelIndex; }, [editingLabelIndex]);
 
@@ -49,30 +51,30 @@ export function Canvas() {
 
   const selectAnnotation = useCallback((index: number | null) => {
     selectedAnnotationIndex.current = index;
-    const rect = index !== null ? annotations.current[index] : null;
-    setSelectedOverlayRect(rect ? { ...rect } : null);
+    const annotation = index !== null ? annotations.current[index] : null;
+    setSelectedOverlay(annotation ? { ...annotation } : null);
   }, []);
 
   const startLabelEditing = useCallback((index: number | null, text = '') => {
     editingAnnotationIndex.current = index;
     setEditingLabelIndex(index);
     setLabelInputText(index !== null ? (text || annotations.current[index]?.label || '') : '');
-    const rect = index !== null ? annotations.current[index] : null;
-    setEditingOverlayRect(rect ? { ...rect } : null);
+    const annotation = index !== null ? annotations.current[index] : null;
+    setEditingOverlay(annotation ? { ...annotation } : null);
   }, []);
 
   const refreshSelectedOverlay = useCallback(() => {
-    const index = selectedAnnotationIndex.current;
-    const rect  = index !== null ? annotations.current[index] : null;
-    setSelectedOverlayRect(rect ? { ...rect } : null);
+    const index      = selectedAnnotationIndex.current;
+    const annotation = index !== null ? annotations.current[index] : null;
+    setSelectedOverlay(annotation ? { ...annotation } : null);
   }, []);
 
   /* ── persistence ───────────────────────────────────────── */
 
   const persist = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !imageRef.current) return;
-    saveSession(imageSrc, annotations.current, canvas.width, canvas.height);
+    if (!canvasRef.current || !imageRef.current) return;
+    const { width, height } = canvasLogicalSize.current;
+    saveSession(imageSrc, annotations.current, width, height);
   }, [imageSrc]);
 
   /* ── draw (renders everything onto the canvas) ─────────── */
@@ -82,22 +84,29 @@ export function Canvas() {
     const image  = imageRef.current;
     if (!canvas || !image) return;
     const ctx = canvas.getContext('2d')!;
+    const { width, height } = canvasLogicalSize.current;
+    const dpr = window.devicePixelRatio || 1;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
 
     if (isDrawingNewRect.current && drawingStartPosition.current) {
       drawRectanglePreview(ctx, drawingStartPosition.current, mousePosition.current);
     }
 
+    if (isDrawingNewCircle.current && drawingStartPosition.current) {
+      drawCirclePreview(ctx, drawingStartPosition.current, mousePosition.current);
+    }
+
     const isDragging = activeDragMode.current !== null;
 
-    annotations.current.forEach((rect, index) => {
+    annotations.current.forEach((annotation, index) => {
       const isSelected = index === selectedAnnotationIndex.current;
       const isHovered  = index === hoveredAnnotationIndex.current && !isSelected;
       const isEditing  = index === editingAnnotationIndex.current;
 
-      drawAnnotation(ctx, rect, {
+      drawAnnotation(ctx, annotation, {
         isSelected,
         isHovered,
         showLabel: (!isSelected && !isEditing) || (isSelected && isDragging),
@@ -133,16 +142,23 @@ export function Canvas() {
         return;
       }
 
+      if (tool === 'circle') {
+        selectAnnotation(null);
+        drawingStartPosition.current = mouse;
+        isDrawingNewCircle.current   = true;
+        return;
+      }
+
       if (tool === 'select') {
         const currentlySelected = selectedAnnotationIndex.current;
 
         if (currentlySelected !== null) {
-          const rect   = annotations.current[currentlySelected];
-          const handle = getHandleAtPoint(mouse, rect);
+          const annotation = annotations.current[currentlySelected];
+          const handle     = getHandleAtPoint(mouse, annotation);
 
           if (handle) {
             activeDragMode.current = handle;
-          } else if (isPointInsideRect(mouse, rect)) {
+          } else if (isPointInsideAnnotation(mouse, annotation)) {
             activeDragMode.current = 'move';
           } else {
             selectAnnotation(null);
@@ -151,8 +167,8 @@ export function Canvas() {
               selectAnnotation(clickedIndex);
               activeDragMode.current    = 'move';
               dragStartPosition.current = mouse;
-              dragOriginalRect.current  = { ...annotations.current[clickedIndex] };
-              setSelectedOverlayRect(null);
+              dragOriginal.current      = { ...annotations.current[clickedIndex] };
+              setSelectedOverlay(null);
             }
             needsRedraw.current = true;
             return;
@@ -160,8 +176,8 @@ export function Canvas() {
 
           if (activeDragMode.current) {
             dragStartPosition.current = mouse;
-            dragOriginalRect.current  = { ...annotations.current[currentlySelected] };
-            setSelectedOverlayRect(null);
+            dragOriginal.current      = { ...annotations.current[currentlySelected] };
+            setSelectedOverlay(null);
           }
         } else {
           const clickedIndex = findAnnotationAtPoint(mouse, annotations.current);
@@ -169,8 +185,8 @@ export function Canvas() {
             selectAnnotation(clickedIndex);
             activeDragMode.current    = 'move';
             dragStartPosition.current = mouse;
-            dragOriginalRect.current  = { ...annotations.current[clickedIndex] };
-            setSelectedOverlayRect(null);
+            dragOriginal.current      = { ...annotations.current[clickedIndex] };
+            setSelectedOverlay(null);
           }
         }
 
@@ -191,13 +207,18 @@ export function Canvas() {
         return;
       }
 
+      if (tool === 'circle') {
+        canvas.style.cursor = 'crosshair';
+        if (isDrawingNewCircle.current) needsRedraw.current = true;
+        return;
+      }
+
       if (tool === 'select') {
         const mode     = activeDragMode.current;
         const origin   = dragStartPosition.current;
-        const original = dragOriginalRect.current;
+        const original = dragOriginal.current;
         const selected = selectedAnnotationIndex.current;
 
-        // ongoing drag — apply the movement
         if (mode && origin && original && selected !== null) {
           const dx = mouse.x - origin.x;
           const dy = mouse.y - origin.y;
@@ -206,19 +227,17 @@ export function Canvas() {
           return;
         }
 
-        // update cursor based on what's under the mouse
         if (selected !== null) {
-          const rect   = annotations.current[selected];
-          const handle = getHandleAtPoint(mouse, rect);
+          const annotation = annotations.current[selected];
+          const handle     = getHandleAtPoint(mouse, annotation);
 
-          if (handle)                              canvas.style.cursor = getCursorForHandle(handle);
-          else if (isPointInsideRect(mouse, rect)) canvas.style.cursor = 'move';
-          else                                     canvas.style.cursor = 'default';
+          if (handle)                                       canvas.style.cursor = getCursorForHandle(handle);
+          else if (isPointInsideAnnotation(mouse, annotation)) canvas.style.cursor = 'move';
+          else                                              canvas.style.cursor = 'default';
         } else {
           canvas.style.cursor = 'default';
         }
 
-        // hover detection (topmost annotation first)
         const hovered = findAnnotationAtPoint(mouse, annotations.current);
         if (hovered !== null && selected === null) canvas.style.cursor = 'pointer';
         if (hovered !== hoveredAnnotationIndex.current) {
@@ -233,7 +252,6 @@ export function Canvas() {
     const handleMouseUp = (e: MouseEvent) => {
       const tool = useAppStore.getState().activeTool;
 
-      // finish drawing a new rectangle
       if (tool === 'rectangle' && isDrawingNewRect.current) {
         const endPosition   = getMousePosition(e);
         const startPosition = drawingStartPosition.current!;
@@ -245,7 +263,8 @@ export function Canvas() {
 
         if (tooSmall) { needsRedraw.current = true; return; }
 
-        const newRect = normalizeRect({
+        const newRect = normalizeAnnotation({
+          type: 'rectangle',
           x1: startPosition.x, y1: startPosition.y,
           x2: endPosition.x,   y2: endPosition.y,
           label: '',
@@ -256,15 +275,38 @@ export function Canvas() {
         return;
       }
 
-      // finish dragging a selected annotation
+      if (tool === 'circle' && isDrawingNewCircle.current) {
+        const endPosition = getMousePosition(e);
+        const center      = drawingStartPosition.current!;
+        const radius      = Math.sqrt(
+          (endPosition.x - center.x) ** 2 + (endPosition.y - center.y) ** 2,
+        );
+
+        isDrawingNewCircle.current   = false;
+        drawingStartPosition.current = null;
+
+        if (radius < 3) { needsRedraw.current = true; return; }
+
+        const newCircle: AnnotationCircle = {
+          type: 'circle',
+          cx: center.x, cy: center.y,
+          radius,
+          label: '',
+        };
+        annotations.current.push(newCircle);
+        startLabelEditing(annotations.current.length - 1, '');
+        draw();
+        return;
+      }
+
       if (tool === 'select' && activeDragMode.current) {
         if (selectedAnnotationIndex.current !== null) {
           annotations.current[selectedAnnotationIndex.current] =
-            normalizeRect(annotations.current[selectedAnnotationIndex.current]);
+            normalizeAnnotation(annotations.current[selectedAnnotationIndex.current]);
         }
         activeDragMode.current    = null;
         dragStartPosition.current = null;
-        dragOriginalRect.current  = null;
+        dragOriginal.current      = null;
         needsRedraw.current       = true;
         refreshSelectedOverlay();
       }
@@ -280,19 +322,26 @@ export function Canvas() {
     image.crossOrigin = 'anonymous';
     image.src = src;
     image.onload = () => {
-      const container = canvas.closest('.canvas-wrapper')! as HTMLElement;
-      const maxWidth  = container.clientWidth - 32;
-      const maxHeight = container.clientHeight - 160;
-      const scale     = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+      const container    = canvas.closest('.canvas-wrapper')! as HTMLElement;
+      const maxWidth     = container.clientWidth - 32;
+      const maxHeight    = container.clientHeight - 160;
+      const scale        = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+      const dpr          = window.devicePixelRatio || 1;
+      const logicalWidth  = Math.round(image.naturalWidth  * scale);
+      const logicalHeight = Math.round(image.naturalHeight * scale);
 
-      canvas.width  = Math.round(image.naturalWidth  * scale);
-      canvas.height = Math.round(image.naturalHeight * scale);
+      canvas.width        = logicalWidth  * dpr;
+      canvas.height       = logicalHeight * dpr;
+      canvas.style.width  = logicalWidth  + 'px';
+      canvas.style.height = logicalHeight + 'px';
+
+      canvasLogicalSize.current = { width: logicalWidth, height: logicalHeight };
       imageRef.current = image;
 
       setImageNaturalSize({ width: image.naturalWidth, height: image.naturalHeight });
       setImageScalePercent(scale * 100);
 
-      annotations.current = restoreSession(src, canvas.width, canvas.height);
+      annotations.current = restoreSession(src, logicalWidth, logicalHeight);
       draw();
     };
 
@@ -305,7 +354,6 @@ export function Canvas() {
 
   /* ── effects ───────────────────────────────────────────── */
 
-  // animation loop
   useEffect(() => {
     const loop = () => {
       if (needsRedraw.current) { draw(); needsRedraw.current = false; }
@@ -315,16 +363,13 @@ export function Canvas() {
     return () => cancelAnimationFrame(animationFrameId.current);
   }, [draw]);
 
-  // re-setup when image changes
   useEffect(() => setup(imageSrc), [imageSrc, setup]);
 
-  // auto-save every 2 seconds
   useEffect(() => {
     const intervalId = setInterval(persist, 2000);
     return () => clearInterval(intervalId);
   }, [persist]);
 
-  // keyboard: Escape deselects, Delete removes annotation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
@@ -351,19 +396,65 @@ export function Canvas() {
 
   const submitLabel = useCallback(() => {
     if (editingLabelIndex === null) return;
-    annotations.current[editingLabelIndex].label = labelInputText.trim();
+
+    const index   = editingLabelIndex;
+    const trimmed = labelInputText.trim();
+
+    // If the label is empty after editing, delete the annotation instead of keeping an unlabeled shape.
+    if (!trimmed) {
+      annotations.current.splice(index, 1);
+
+      const selected = selectedAnnotationIndex.current;
+      if (selected !== null) {
+        if (selected === index) {
+          selectAnnotation(null);
+        } else if (selected > index) {
+          selectedAnnotationIndex.current = selected - 1;
+        }
+      }
+
+      const hovered = hoveredAnnotationIndex.current;
+      if (hovered !== null) {
+        if (hovered === index) {
+          hoveredAnnotationIndex.current = null;
+        } else if (hovered > index) {
+          hoveredAnnotationIndex.current = hovered - 1;
+        }
+      }
+
+      startLabelEditing(null);
+      needsRedraw.current = true;
+      draw();
+      persist();
+      return;
+    }
+
+    annotations.current[index].label = trimmed;
     startLabelEditing(null);
     refreshSelectedOverlay();
     draw();
     persist();
     useAppStore.getState().triggerTutorial();
-  }, [editingLabelIndex, labelInputText, draw, persist, startLabelEditing, refreshSelectedOverlay]);
+  }, [
+    draw,
+    editingLabelIndex,
+    labelInputText,
+    persist,
+    refreshSelectedOverlay,
+    selectAnnotation,
+    startLabelEditing,
+  ]);
 
   const openLabelEditor = useCallback(() => {
     const index = selectedAnnotationIndex.current;
     if (index === null) return;
     startLabelEditing(index, annotations.current[index]?.label || '');
   }, [startLabelEditing]);
+
+  /* ── compute overlay positions ─────────────────────────── */
+
+  const selectedBounds = selectedOverlay ? getAnnotationBounds(selectedOverlay) : null;
+  const editingBounds  = editingOverlay  ? getAnnotationBounds(editingOverlay)  : null;
 
   /* ── render ────────────────────────────────────────────── */
 
@@ -373,30 +464,28 @@ export function Canvas() {
       <div className="canvas-container">
         <canvas ref={canvasRef} />
 
-        {/* label badge / edit button — visible when an annotation is selected */}
-        {selectedOverlayRect && editingLabelIndex === null && (
+        {selectedBounds && editingLabelIndex === null && (
           <button
             className="canvas-edit-label-btn"
             style={{
-              left: Math.min(selectedOverlayRect.x1, selectedOverlayRect.x2),
-              top:  Math.min(selectedOverlayRect.y1, selectedOverlayRect.y2) - 22,
+              left: selectedBounds.left,
+              top:  selectedBounds.top - 22,
             }}
             onClick={openLabelEditor}
           >
-            {selectedOverlayRect.label || 'Add label'}
+            {selectedOverlay!.label || 'Add label'}
             <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
               <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
             </svg>
           </button>
         )}
 
-        {/* inline text input — visible while editing a label */}
-        {editingOverlayRect && editingLabelIndex !== null && (
+        {editingBounds && editingLabelIndex !== null && (
           <input
             className="canvas-inline-label"
             style={{
-              left: Math.min(editingOverlayRect.x1, editingOverlayRect.x2),
-              top:  Math.min(editingOverlayRect.y1, editingOverlayRect.y2) - 22,
+              left: editingBounds.left,
+              top:  editingBounds.top - 22,
             }}
             type="text"
             placeholder="Label"

@@ -1,10 +1,11 @@
-import type { AnnotationRect, Point } from './types';
+import type { Annotation, AnnotationCircle, AnnotationRect, Point } from './types';
 import {
   HANDLE_SIZE, HANDLE_HALF_SIZE, COLORS,
   LABEL_BADGE_HEIGHT, LABEL_BADGE_PADDING, LABEL_BADGE_RADIUS, LABEL_FONT,
 } from './constants';
+import { getAnnotationBounds } from './geometry';
 
-/* ── rectangle creation preview ──────────────────────────── */
+/* ── creation previews ──────────────────────────────────────── */
 
 export function drawRectanglePreview(ctx: CanvasRenderingContext2D, start: Point, end: Point) {
   ctx.strokeStyle = COLORS.selected;
@@ -19,7 +20,24 @@ export function drawRectanglePreview(ctx: CanvasRenderingContext2D, start: Point
   ctx.stroke();
 }
 
-/* ── single annotation (stroke + optional label + optional handles) */
+export function drawCirclePreview(ctx: CanvasRenderingContext2D, center: Point, edge: Point) {
+  const radius = Math.sqrt((edge.x - center.x) ** 2 + (edge.y - center.y) ** 2);
+
+  ctx.strokeStyle = COLORS.selected;
+  ctx.lineWidth   = 1;
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.rect(center.x - 2, center.y - 2, 4, 4);
+  ctx.fillStyle = COLORS.previewCorner;
+  ctx.fill();
+  ctx.strokeStyle = COLORS.selected;
+  ctx.stroke();
+}
+
+/* ── single annotation ──────────────────────────────────────── */
 
 interface DrawOptions {
   isSelected: boolean;
@@ -27,7 +45,17 @@ interface DrawOptions {
   showLabel: boolean;
 }
 
-export function drawAnnotation(ctx: CanvasRenderingContext2D, rect: AnnotationRect, options: DrawOptions) {
+export function drawAnnotation(ctx: CanvasRenderingContext2D, annotation: Annotation, options: DrawOptions) {
+  if (annotation.type === 'circle') {
+    drawCircleAnnotation(ctx, annotation, options);
+  } else {
+    drawRectAnnotation(ctx, annotation, options);
+  }
+}
+
+/* ── rectangle ──────────────────────────────────────────────── */
+
+function drawRectAnnotation(ctx: CanvasRenderingContext2D, rect: AnnotationRect, options: DrawOptions) {
   const color = options.isSelected ? COLORS.selected : COLORS.annotation;
 
   if (options.isHovered) {
@@ -44,32 +72,11 @@ export function drawAnnotation(ctx: CanvasRenderingContext2D, rect: AnnotationRe
   }
 
   if (options.isSelected) {
-    drawSelectionHandles(ctx, rect);
+    drawRectSelectionHandles(ctx, rect);
   }
 }
 
-/* ── label badge (filled rounded rect with white text) ───── */
-
-function drawLabelBadge(ctx: CanvasRenderingContext2D, rect: AnnotationRect, backgroundColor: string) {
-  ctx.font = LABEL_FONT;
-  const textWidth  = ctx.measureText(rect.label).width;
-  const badgeWidth = textWidth + LABEL_BADGE_PADDING * 2;
-  const badgeX     = Math.min(rect.x1, rect.x2);
-  const badgeY     = Math.min(rect.y1, rect.y2) - LABEL_BADGE_HEIGHT - 2;
-
-  ctx.fillStyle = backgroundColor;
-  ctx.beginPath();
-  ctx.roundRect(badgeX, badgeY, badgeWidth, LABEL_BADGE_HEIGHT, LABEL_BADGE_RADIUS);
-  ctx.fill();
-
-  ctx.fillStyle    = COLORS.labelText;
-  ctx.textBaseline = 'middle';
-  ctx.fillText(rect.label, badgeX + LABEL_BADGE_PADDING, badgeY + LABEL_BADGE_HEIGHT / 2);
-}
-
-/* ── corner handles on selected annotation ───────────────── */
-
-function drawSelectionHandles(ctx: CanvasRenderingContext2D, rect: AnnotationRect) {
+function drawRectSelectionHandles(ctx: CanvasRenderingContext2D, rect: AnnotationRect) {
   const corners: [number, number][] = [
     [rect.x1, rect.y1], [rect.x2, rect.y1],
     [rect.x1, rect.y2], [rect.x2, rect.y2],
@@ -83,9 +90,52 @@ function drawSelectionHandles(ctx: CanvasRenderingContext2D, rect: AnnotationRec
     ctx.strokeRect(x - HANDLE_HALF_SIZE, y - HANDLE_HALF_SIZE, HANDLE_SIZE, HANDLE_SIZE);
   }
 
-  // center move handle (small circle)
-  const cx = (rect.x1 + rect.x2) / 2;
-  const cy = (rect.y1 + rect.y2) / 2;
+  drawCenterMoveHandle(ctx, (rect.x1 + rect.x2) / 2, (rect.y1 + rect.y2) / 2);
+}
+
+/* ── circle ─────────────────────────────────────────────────── */
+
+function drawCircleAnnotation(ctx: CanvasRenderingContext2D, circle: AnnotationCircle, options: DrawOptions) {
+  const color = options.isSelected ? COLORS.selected : COLORS.annotation;
+
+  if (options.isHovered) {
+    ctx.fillStyle = COLORS.hoverOverlay;
+    ctx.beginPath();
+    ctx.arc(circle.cx, circle.cy, circle.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = options.isSelected ? 2 : 1;
+  ctx.beginPath();
+  ctx.arc(circle.cx, circle.cy, circle.radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (circle.label && options.showLabel) {
+    drawLabelBadge(ctx, circle, color);
+  }
+
+  if (options.isSelected) {
+    drawCircleSelectionHandles(ctx, circle);
+  }
+}
+
+function drawCircleSelectionHandles(ctx: CanvasRenderingContext2D, circle: AnnotationCircle) {
+  const handleX = circle.cx + circle.radius;
+  const handleY = circle.cy;
+
+  ctx.fillStyle   = COLORS.handleFill;
+  ctx.strokeStyle = COLORS.selected;
+  ctx.lineWidth   = 1;
+  ctx.fillRect(handleX - HANDLE_HALF_SIZE, handleY - HANDLE_HALF_SIZE, HANDLE_SIZE, HANDLE_SIZE);
+  ctx.strokeRect(handleX - HANDLE_HALF_SIZE, handleY - HANDLE_HALF_SIZE, HANDLE_SIZE, HANDLE_SIZE);
+
+  drawCenterMoveHandle(ctx, circle.cx, circle.cy);
+}
+
+/* ── shared helpers ─────────────────────────────────────────── */
+
+function drawCenterMoveHandle(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   ctx.beginPath();
   ctx.arc(cx, cy, HANDLE_HALF_SIZE, 0, Math.PI * 2);
   ctx.fillStyle   = COLORS.handleFill;
@@ -93,4 +143,23 @@ function drawSelectionHandles(ctx: CanvasRenderingContext2D, rect: AnnotationRec
   ctx.lineWidth   = 1;
   ctx.fill();
   ctx.stroke();
+}
+
+function drawLabelBadge(ctx: CanvasRenderingContext2D, annotation: Annotation, backgroundColor: string) {
+  const bounds = getAnnotationBounds(annotation);
+
+  ctx.font = LABEL_FONT;
+  const textWidth  = ctx.measureText(annotation.label).width;
+  const badgeWidth = textWidth + LABEL_BADGE_PADDING * 2;
+  const badgeX     = bounds.left;
+  const badgeY     = bounds.top - LABEL_BADGE_HEIGHT - 2;
+
+  ctx.fillStyle = backgroundColor;
+  ctx.beginPath();
+  ctx.roundRect(badgeX, badgeY, badgeWidth, LABEL_BADGE_HEIGHT, LABEL_BADGE_RADIUS);
+  ctx.fill();
+
+  ctx.fillStyle    = COLORS.labelText;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(annotation.label, badgeX + LABEL_BADGE_PADDING, badgeY + LABEL_BADGE_HEIGHT / 2);
 }

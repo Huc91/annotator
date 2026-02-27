@@ -1,73 +1,81 @@
-# React + TypeScript + Vite
+# Image Annotator
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser-based image annotation tool built with React, TypeScript and Canvas 2D.
 
-Currently, two official plugins are available:
+## Main Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Rectangle annotations** — click and drag to draw a bounding box
+- **Circle annotations** — click to set the center, drag to set the radius
+- **Select & edit** — click an annotation to select it, then drag handles to resize or the center handle to move it
+- **Labels** — after drawing a shape you're prompted for a label; click the label badge on a selected annotation to edit it
+- **Hover highlighting** — annotations light up on mouse hover when the select tool is active
+- **Image upload** — load any image from your file system
 
-## React Compiler
+## Extra Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Keyboard shortcuts** — V (select), R (rectangle), C (circle), Escape (deselect), Delete/Backspace (remove)
+- **Auto-save** — session is persisted to localStorage every 2 seconds and restored on reload
+- **CSV export** — download all annotations as a CSV with normalised coordinates
+- **Image upload bu URL** — load image by URL
+- **High-DPI rendering** — canvas scales to `devicePixelRatio` for sharp output on Retina displays
 
-## Expanding the ESLint configuration
+## Getting started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Running tests
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+This project uses **Vitest** for unit tests.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm test
 ```
+
+## Architecture
+
+### Stack
+
+React 19, TypeScript, Vite, Zustand (state), HTML Canvas 2D.
+
+### Why refs instead of React state for annotations?
+
+Dragging a handle fires `mousemove` 60+ times per second. If each event triggered `setState` and a React re-render, the UI would be sluggish. Instead:
+
+- Annotation data lives in a `useRef` mutated directly during user interaction
+- A `needsRedraw` flag tells a `requestAnimationFrame` loop when to repaint the canvas
+- React state is only updated when the user finishes an action (selects, stops dragging, edits a label) to position the HTML overlay elements (label button, text input)
+
+This way I do not trigger continuosly a React re-render.
+
+### Logical reasoning
+
+I thought of this like a videogame, so I use hitboxes concept for selection, the animation frame to render etc...
+
+### Module layout
+
+```
+src/components/Canvas/
+  types.ts        — Annotation union, DragMode, Point
+  constants.ts    — colors, sizes, localStorage key
+  geometry.ts     — hit testing, drag math, bounding boxes (pure functions)
+  drawing.ts      — canvas 2D rendering: previews, shapes, handles, labels
+  persistence.ts  — normalise to [0..1], save/restore localStorage, CSV export
+  Canvas.tsx      — orchestrator: owns refs, event loop, mouse handlers, React overlays
+```
+
+`geometry.ts` and `drawing.ts` are pure and testable in isolation. All imperative glue is confined to `Canvas.tsx`.
+
+### Normalised coordinates
+
+Annotations are stored in normalised image coordinates (0 to 1)
+
+### Adding a new shape
+
+1. Add the type to the union in `types.ts`
+2. Add geometry branches in `geometry.ts` (hit test, drag, bounds)
+3. Add drawing branches in `drawing.ts` (render, handles)
+4. Add persistence branches in `persistence.ts` (normalise, CSV)
+5. Add the tool branch in `Canvas.tsx` mouse handlers
