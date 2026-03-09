@@ -1,7 +1,7 @@
 # :black_nib: Image Annotator
 
 A browser-based image annotation tool built with React, TypeScript and Canvas 2D.
-
+Use it for AI tools.
 ## Main Features
 
 - **Rectangle annotations** — click and drag to draw a bounding box
